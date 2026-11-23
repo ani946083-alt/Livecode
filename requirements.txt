@@ -1,0 +1,2 @@
+# FloodWatch-Parser uses only the Python standard library (Python 3.9+).
+# Nothing to install - no third-party packages are required.
