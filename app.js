@@ -1,74 +1,8 @@
 (() => {
   const params = new URLSearchParams(window.location.search);
-  const apiBase = (params.get("api") || "").replace(/\/+$/, "");
-  const isDemo = !apiBase;
-
-  const demoRoads = [
-    {
-      id: "road-1",
-      road_name: "স্টেশন রোড",
-      area: "নতুন বাজার",
-      status: "blocked",
-      depth_estimate_cm: 55,
-      depth_is_approximate: true,
-      latest_report_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
-      report_count: 4,
-      has_disagreement: true,
-      is_stale: false,
-      recent_reports: [
-        { text: "রাস্তা প্রায় বন্ধ, পানি কোমর পর্যন্ত", reported_at: new Date(Date.now() - 12 * 60 * 1000).toISOString() },
-        { text: "দোকানের সামনে হাঁটু-সমান পানি", reported_at: new Date(Date.now() - 20 * 60 * 1000).toISOString() },
-      ],
-    },
-    {
-      id: "road-2",
-      road_name: "কলেজ রোড",
-      area: "মধ্যপাড়া",
-      status: "waterlogged",
-      depth_estimate_cm: 35,
-      depth_is_approximate: true,
-      latest_report_at: new Date(Date.now() - 34 * 60 * 1000).toISOString(),
-      report_count: 6,
-      has_disagreement: false,
-      is_stale: false,
-      recent_reports: [
-        { text: "হাঁটু-সমান পানি, রিকশা কোনোমতে যাচ্ছে", reported_at: new Date(Date.now() - 34 * 60 * 1000).toISOString() },
-      ],
-    },
-    {
-      id: "road-3",
-      road_name: "হাসপাতাল সংযোগ সড়ক",
-      area: "দক্ষিণপাড়া",
-      status: "waterlogged",
-      depth_estimate_cm: 12,
-      depth_is_approximate: false,
-      latest_report_at: new Date(Date.now() - 78 * 60 * 1000).toISOString(),
-      report_count: 3,
-      has_disagreement: true,
-      is_stale: false,
-      recent_reports: [
-        { text: "নালা উপচে পানি উঠেছে, প্রায় ১২ সেমি", reported_at: new Date(Date.now() - 78 * 60 * 1000).toISOString() },
-        { text: "এখন পানি কম, মোটরসাইকেল যাচ্ছে", reported_at: new Date(Date.now() - 86 * 60 * 1000).toISOString() },
-      ],
-    },
-    {
-      id: "road-4",
-      road_name: "পুরাতন ব্রিজ",
-      area: "পূর্বপাড়া",
-      status: "passable",
-      depth_estimate_cm: null,
-      depth_is_approximate: false,
-      latest_report_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-      report_count: 2,
-      has_disagreement: false,
-      is_stale: true,
-      recent_reports: [
-        { text: "পানি নেমেছে, ছোট গাড়ি চলাচল করছে", reported_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() },
-      ],
-    },
-  ];
-
-  let roads = isDemo ? [...demoRoads] : [];
+  const apiBase = (params.get("api") || "/api").replace(/\/+$/, "");
+  let roads = [];
+  let summary = null;
   const roadsList = document.querySelector("#roads-list");
   const notice = document.querySelector("#notice");
   const searchInput = document.querySelector("#search-input");
@@ -77,7 +11,6 @@
   const submitButton = document.querySelector("#submit-button");
   const formMessage = document.querySelector("#form-message");
 
-  document.querySelector("#connection-label").textContent = isDemo ? "ডেমো ডেটা" : "লাইভ API";
   document.querySelector("#today-label").textContent = new Intl.DateTimeFormat("bn-BD", {
     weekday: "short",
     day: "numeric",
@@ -108,28 +41,36 @@
 
   function statusInfo(status) {
     const values = {
-      blocked: ["চলাচল বন্ধ", "status-blocked"],
-      waterlogged: ["পানির প্রভাব", "status-waterlogged"],
-      passable: ["চলাচল সম্ভব", "status-passable"],
+      severe: ["অতি উচ্চ ঝুঁকি", "status-blocked"],
+      high: ["উচ্চ ঝুঁকি", "status-waterlogged"],
+      moderate: ["মাঝারি ঝুঁকি", "status-waterlogged"],
+      low: ["কম ঝুঁকি", "status-passable"],
       unknown: ["অবস্থা অজানা", "status-unknown"],
     };
     return values[status] || values.unknown;
   }
 
   function sortRoads(items) {
-    const priority = { blocked: 0, waterlogged: 1, unknown: 2, passable: 3 };
+    const priority = { severe: 0, high: 1, moderate: 2, low: 3, unknown: 4 };
     return [...items].sort((a, b) => {
       const byStatus = (priority[a.status] ?? 2) - (priority[b.status] ?? 2);
       if (byStatus) return byStatus;
+      const byDepth = (Number(b.depth_estimate_cm) || 0) - (Number(a.depth_estimate_cm) || 0);
+      if (byDepth) return byDepth;
       return new Date(b.latest_report_at || 0) - new Date(a.latest_report_at || 0);
     });
   }
 
+  function normalizeArea(value) {
+    return String(value || "").normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase();
+  }
+
   function updateStats() {
-    document.querySelector("#roads-count").textContent = roads.length.toLocaleString("bn-BD");
-    document.querySelector("#blocked-count").textContent = roads.filter((road) => road.status === "blocked").length.toLocaleString("bn-BD");
-    document.querySelector("#water-count").textContent = roads.filter((road) => road.status === "waterlogged").length.toLocaleString("bn-BD");
-    document.querySelector("#reports-count").textContent = roads.reduce((sum, road) => sum + (Number(road.report_count) || 0), 0).toLocaleString("bn-BD");
+    const areas = summary && Array.isArray(summary.areas) ? summary.areas : [];
+    document.querySelector("#roads-count").textContent = Number(summary?.area_count || 0).toLocaleString("bn-BD");
+    document.querySelector("#blocked-count").textContent = areas.filter((area) => area.status === "severe").length.toLocaleString("bn-BD");
+    document.querySelector("#water-count").textContent = areas.filter((area) => ["high", "moderate"].includes(area.status)).length.toLocaleString("bn-BD");
+    document.querySelector("#reports-count").textContent = Number(summary?.total_reports || 0).toLocaleString("bn-BD");
   }
 
   function renderRoad(road) {
@@ -141,6 +82,7 @@
     const flags = [
       road.has_disagreement ? '<span class="disagreement">⚠ রিপোর্টে মতভেদ</span>' : "",
       road.is_stale ? '<span class="stale-label">• পুরোনো রিপোর্ট</span>' : "",
+      road.needs_review ? '<span class="review-label">যাচাই প্রয়োজন</span>' : "",
     ].filter(Boolean).join("");
     const notes = recent.map((report) =>
       `<div class="road-note${road.has_disagreement ? " warning" : ""}">“${escapeHtml(report.text)}”</div>`,
@@ -180,62 +122,60 @@
   }
 
   async function loadRoads() {
-    if (isDemo) {
-      render();
-      return;
-    }
-
     roadsList.innerHTML = '<div class="loading-state">রিপোর্ট লোড হচ্ছে...</div>';
     notice.hidden = true;
     try {
-      const response = await fetch(`${apiBase}/roads`, { headers: { Accept: "application/json" } });
-      if (!response.ok) throw new Error(`রাস্তার রিপোর্ট আনা যায়নি (HTTP ${response.status})`);
-      const payload = await response.json();
-      const records = Array.isArray(payload) ? payload : payload.roads;
-      if (!Array.isArray(records)) throw new Error("Backend-এর /roads response-এর format সঠিক নয়।");
-      roads = records;
+      const [summaryResponse, reportsResponse] = await Promise.all([
+        fetch(`${apiBase}/summary`, { headers: { Accept: "application/json" } }),
+        fetch(`${apiBase}/reports`, { headers: { Accept: "application/json" } }),
+      ]);
+      if (!summaryResponse.ok) throw new Error(`সারাংশ আনা যায়নি (HTTP ${summaryResponse.status})`);
+      if (!reportsResponse.ok) throw new Error(`রিপোর্ট আনা যায়নি (HTTP ${reportsResponse.status})`);
+      const summaryPayload = await summaryResponse.json();
+      const reportPayload = await reportsResponse.json();
+      if (!Array.isArray(summaryPayload.worst_areas) || !Array.isArray(summaryPayload.areas)) {
+        throw new Error("Backend-এর /summary response-এর format সঠিক নয়।");
+      }
+      if (!Array.isArray(reportPayload)) {
+        throw new Error("Backend-এর /reports response-এর format সঠিক নয়।");
+      }
+      summary = summaryPayload;
+      document.querySelector("#connection-label").textContent = "লাইভ Backend";
+      const freshReportsByArea = new Map();
+      reportPayload.filter((report) => !report.is_old).forEach((report) => {
+        const key = normalizeArea(report.area);
+        if (!freshReportsByArea.has(key)) freshReportsByArea.set(key, []);
+        freshReportsByArea.get(key).push(report);
+      });
+      roads = summary.worst_areas.map((area) => {
+        const key = normalizeArea(area.area);
+        const areaReports = (freshReportsByArea.get(key) || [])
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        return {
+          road_name: area.road_name || area.area,
+          area: area.area,
+          status: area.status || "unknown",
+          depth_estimate_cm: area.depth_cm,
+          depth_is_approximate: area.needs_review || area.has_conflict || area.confidence < 0.9,
+          latest_report_at: area.latest_report_at,
+          report_count: area.report_count,
+          has_disagreement: area.has_conflict,
+          is_stale: false,
+          needs_review: area.needs_review,
+          recent_reports: areaReports.slice(0, 2).map((report) => ({
+            text: report.text,
+            reported_at: report.created_at,
+          })),
+        };
+      });
       render();
     } catch (error) {
+      roads = [];
+      summary = null;
+      document.querySelector("#connection-label").textContent = "Backend সংযোগ নেই";
       roadsList.innerHTML = '<div class="empty-state">লাইভ রিপোর্ট লোড করা যায়নি। API ঠিক আছে কি না দেখে আবার চেষ্টা করুন।</div>';
       notice.textContent = `লাইভ API-তে সংযোগ করা যায়নি: ${error.message}`;
       notice.hidden = false;
-    }
-  }
-
-  function classifyDemoReport(text) {
-    const normalized = text.toLocaleLowerCase();
-    if (/বন্ধ|যাওয়া যাচ্ছে না|চলাচল অসম্ভব/.test(normalized)) return "blocked";
-    if (/পানি|জল|ডুব|জমে/.test(normalized)) return "waterlogged";
-    if (/চলাচল|যাচ্ছে|পাস/.test(normalized)) return "passable";
-    return "unknown";
-  }
-
-  async function submitDemoReport(report) {
-    const currentTime = new Date().toISOString();
-    const existing = roads.find((road) =>
-      road.road_name.toLocaleLowerCase() === report.road_name.toLocaleLowerCase()
-      && road.area.toLocaleLowerCase() === report.area.toLocaleLowerCase(),
-    );
-    if (existing) {
-      existing.status = classifyDemoReport(report.text);
-      existing.latest_report_at = currentTime;
-      existing.report_count = (Number(existing.report_count) || 0) + 1;
-      existing.recent_reports = [{ text: report.text, reported_at: currentTime }, ...(existing.recent_reports || [])].slice(0, 2);
-      existing.has_disagreement = false;
-      existing.is_stale = false;
-    } else {
-      roads.unshift({
-        id: `demo-${Date.now()}`,
-        ...report,
-        status: classifyDemoReport(report.text),
-        depth_estimate_cm: null,
-        depth_is_approximate: false,
-        latest_report_at: currentTime,
-        report_count: 1,
-        has_disagreement: false,
-        is_stale: false,
-        recent_reports: [{ text: report.text, reported_at: currentTime }],
-      });
     }
   }
 
@@ -252,33 +192,26 @@
     };
 
     try {
-      if (isDemo) {
-        await submitDemoReport(report);
-      } else {
-        const response = await fetch(`${apiBase}/reports`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify(report),
-        });
-        if (!response.ok) {
-          let reason = `রিপোর্ট জমা দেওয়া যায়নি (HTTP ${response.status})`;
-          try {
-            const body = await response.json();
-            if (body.message || body.error) reason = body.message || body.error;
-          } catch {
-            // Keep the HTTP error when the server does not return JSON.
-          }
-          throw new Error(reason);
+      const response = await fetch(`${apiBase}/reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(report),
+      });
+      if (!response.ok) {
+        let reason = `রিপোর্ট জমা দেওয়া যায়নি (HTTP ${response.status})`;
+        try {
+          const body = await response.json();
+          if (body.message || body.error) reason = body.message || body.error;
+        } catch {
+          // Keep the HTTP error when the server does not return JSON.
         }
-        await loadRoads();
-        if (!notice.hidden) throw new Error("রিপোর্ট জমা হয়েছে, কিন্তু তালিকা রিফ্রেশ করা যায়নি।");
+        throw new Error(reason);
       }
-
+      await response.json();
+      await loadRoads();
+      if (!notice.hidden) throw new Error("রিপোর্ট জমা হয়েছে, কিন্তু তালিকা রিফ্রেশ করা যায়নি।");
       form.reset();
-      render();
-      formMessage.textContent = isDemo
-        ? "ডেমোতে রিপোর্ট যোগ হয়েছে। এটি Backend-এ সংরক্ষিত হয়নি।"
-        : "রিপোর্ট সফলভাবে জমা হয়েছে। ধন্যবাদ!";
+      formMessage.textContent = "রিপোর্ট Backend-এ সংরক্ষিত হয়েছে। ধন্যবাদ!";
       formMessage.className = "form-message success";
       formMessage.hidden = false;
     } catch (error) {
@@ -296,4 +229,5 @@
   document.querySelector("#refresh-button").addEventListener("click", loadRoads);
 
   loadRoads();
+  window.setInterval(loadRoads, 60_000);
 })();

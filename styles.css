@@ -303,6 +303,7 @@ h2 { margin: 3px 0 0; color: #20372d; font-size: 16px; line-height: 1.5; }
 .road-note.warning { color: #75551f; background: #fcf7ed; border-left-color: #ddbd68; }
 .disagreement { display: inline-flex; align-items: center; gap: 4px; color: #88611e; }
 .stale-label { display: inline-flex; align-items: center; gap: 4px; color: #9c4c41; }
+.review-label { display: inline-flex; align-items: center; gap: 4px; color: #88611e; }
 .empty-state, .loading-state { padding: 45px 18px; color: #718078; font-size: 11px; text-align: center; }
 .list-footer { display: flex; align-items: center; gap: 7px; padding: 11px 19px; color: #718078; background: #fafcfb; border-top: 1px solid #edf1ee; font-size: 9px; line-height: 1.6; }
 .footer-dot { width: 5px; height: 5px; flex: none; background: #8ea596; }
